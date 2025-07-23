@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <title>متابعة السكر</title>
+  <style>
+    body { font-family: 'Tahoma', sans-serif; direction: rtl; background-color: #f7f9fc; color: #333; padding: 1rem; }
+    input, select, button, textarea {
+      padding: 0.5rem;
+      margin: 0.5rem 0;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+button {
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s, box-shadow 0.3s;
+  font-size: 1.1rem;
+  font-weight: bold;
+  padding: 0.75rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.save-btn { background-color: #d1fae5; color: #000; }
+.save-btn:hover { background-color: #a7f3d0; }
+.save-btn::before { content: "💾 "; }
+
+.now-btn { background-color: #e0f2fe; color: #000; }
+.now-btn:hover { background-color: #bae6fd; }
+.now-btn::before { content: "⏰ "; }
+
+.clear-btn { background-color: #fef9c3; color: #000; }
+.clear-btn:hover { background-color: #fef08a; }
+.clear-btn::before { content: "🗑️ "; }
+
+.pdf-btn { background-color: #e5e7eb; color: #000; }
+.pdf-btn:hover { background-color: #d1d5db; }
+.pdf-btn::before { content: "📄 "; }
+
+.delete-btn {
+  background-color: #e2e8f0;
+  color: #1f2937;
+  font-size: 1rem;
+  font-weight: bold;
+  padding: 0.5rem;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.delete-btn::before { content: "✖️ "; }
+
+
+
+    .reading {
+      background-color: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin: 0.5rem 0;
+      padding: 0.75rem;
+      box-shadow: 1px 1px 5px rgba(0,0,0,0.05);
+    }
+    .button-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <h2>  تتبع قراءات السكر</h2>
+
+  <label for="sugar">قراءة السكر (mg/dL):</label>
+  <input type="number" id="sugar" placeholder="مثلاً 110">
+
+  <label for="timing">وقت القراءة:</label>
+  <select id="timing">
+    <option value="قبل الأكل">قبل الأكل</option>
+    <option value="بعد الأكل">بعد الأكل</option>
+  </select>
+
+  <label for="customDate">التاريخ والوقت (اختياري):</label>
+  <input type="datetime-local" id="customDate">
+  <button class="now-btn" onclick="setNow()">الآن</button>
+
+  <label for="note">ملاحظة (اختياري):</label>
+  <textarea id="note" rows="2" placeholder="مثلاً: أكل عدس وكوسة أو بعد المشي"></textarea>
+
+  <div class="button-row">
+    <button class="save-btn" onclick="saveReading()">حفظ القراءة</button>
+    <button class="clear-btn" onclick="clearAll()">حذف الكل</button>
+    <button class="pdf-btn" onclick="exportPDF()">تصدير PDF</button>
+  </div>
+
+  <h3>آخر القراءات</h3>
+  <div id="history"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const limit = 50;
+
+    function saveReading() {
+      const value = parseInt(document.getElementById('sugar').value);
+      const timing = document.getElementById('timing').value;
+      const note = document.getElementById('note').value;
+      const customDate = document.getElementById('customDate').value;
+      const time = customDate ? new Date(customDate).toLocaleString() : new Date().toLocaleString();
+
+      if (!value) return alert('الرجاء إدخال قيمة صحيحة.');
+
+      const readings = JSON.parse(localStorage.getItem('readings') || '[]');
+      readings.unshift({ value, timing, note, time });
+      if (readings.length > limit) readings.pop();
+      localStorage.setItem('readings', JSON.stringify(readings));
+      renderReadings();
+
+      document.getElementById('sugar').value = '';
+      document.getElementById('note').value = '';
+      document.getElementById('customDate').value = '';
+    }
+
+   function setNow() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000; // فرق التوقيت بالمللي ثانية
+  const localISOTime = new Date(now - offset).toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  document.getElementById('customDate').value = localISOTime;
+}
+
+    function renderReadings() {
+      const readings = JSON.parse(localStorage.getItem('readings') || '[]');
+      const history = document.getElementById('history');
+      history.innerHTML = readings.map((r, i) => `
+        <div class="reading">
+          <strong>${r.time}</strong><br>
+          ${r.value} mg/dL <em>(${r.timing})</em><br>
+          ${r.note ? `<small>📝 ${r.note}</small><br>` : ''}
+          <button onclick="editReading(${i})">✏️ تعديل</button>
+          <button class="delete-btn" onclick="deleteReading(${i})">🗑️ حذف</button>
+        </div>
+      `).join('');
+    }
+
+    function deleteReading(index) {
+      const readings = JSON.parse(localStorage.getItem('readings') || '[]');
+      readings.splice(index, 1);
+      localStorage.setItem('readings', JSON.stringify(readings));
+      renderReadings();
+    }
+
+    function clearAll() {
+      if (confirm('هل أنت متأكد من حذف جميع القراءات؟')) {
+        localStorage.removeItem('readings');
+        renderReadings();
+      }
+    }
+
+function exportPDF() {
+  const readings = JSON.parse(localStorage.getItem('readings') || '[]');
+
+  if (readings.length === 0) {
+    alert("لا توجد قراءات محفوظة.");
+    return;
+  }
+
+  let exportContainer = document.getElementById("pdf-export-temp");
+  if (exportContainer) exportContainer.remove();
+
+  exportContainer = document.createElement("div");
+  exportContainer.id = "pdf-export-temp";
+  exportContainer.style.position = "static"; 
+  exportContainer.style.width = "21cm";
+  exportContainer.style.padding = "2cm";
+  exportContainer.style.fontFamily = "Tahoma, Arial, sans-serif";
+  exportContainer.setAttribute("dir", "rtl");
+
+  let content = `<h2 style="text-align:center;">  تقرير قراءات سكر بابا  </h2>`;
+  readings.forEach((r, i) => {
+    content += `
+      <div style="margin-bottom: 20px; page-break-inside: avoid;">
+        <strong>${i + 1}. ${r.time}</strong><br>
+        <span>   القراءة  ${r.value}  - ${r.timing}</span><br>
+        ${r.note ? `<em>📝 ${r.note}</em>` : ''}
+      </div>
+    `;
+  });
+
+  exportContainer.innerHTML = content;
+  document.body.appendChild(exportContainer);
+
+  // ننتظر ليرسم المتصفح النص قبل التصدير
+  setTimeout(() => {
+    html2pdf().set({
+      margin: [10, 10, 10, 10],
+      filename: "تقرير_السكر.pdf",
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+    })
+    .from(exportContainer)
+    .save()
+    .then(() => {
+      document.body.removeChild(exportContainer);
+    });
+  }, 100); // كافية للرسم
+}
+
+
+
+
+    function editReading(index) {
+      const readings = JSON.parse(localStorage.getItem('readings') || '[]');
+      const item = readings[index];
+      const newVal = prompt('تعديل القراءة:', item.value);
+      const newTiming = prompt('تعديل الوقت (قبل الأكل / بعد الأكل):', item.timing);
+      const newNote = prompt('تعديل الملاحظة:', item.note);
+      const newTime = prompt('تعديل التاريخ والوقت:', item.time);
+      if (newVal && !isNaN(newVal)) {
+        readings[index] = {
+          value: parseInt(newVal),
+          timing: newTiming || item.timing,
+          note: newNote || '',
+          time: newTime || item.time
+        };
+        localStorage.setItem('readings', JSON.stringify(readings));
+        renderReadings();
+      }
+    }
+
+    window.addEventListener('load', () => {
+      renderReadings();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+    });
+  </script>
+</body>
+</html>
